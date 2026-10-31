@@ -91,6 +91,9 @@ TW_EXTRA_LANGUAGES := true
 TW_SCREEN_BLANK_ON_BOOT := true
 TW_INPUT_BLACKLIST := "hbtp_vm"
 TW_USE_TOOLBOX := true
+# recovery 环境无 health HAL 服务,TWRP 3.7.x 默认走 HIDL GetBatteryInfo 取不到电量;
+# 改为直读 /sys/class/power_supply/battery/capacity(实机节点完好)
+TW_USE_LEGACY_BATTERY_SERVICES := true
 TARGET_RECOVERY_FSTAB := $(DEVICE_PATH)/recovery.fstab
 
 # SHRP Configuration
