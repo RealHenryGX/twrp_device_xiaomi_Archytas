@@ -26,7 +26,10 @@ on property:ro.debuggable=0
     # set charging free due to it wait for USB activation
     start adbd
 
-on property:sys.usb.ffs.ready=1
+# 注意:adbd 每次(重)初始化都会 ffs.ready 0→1 触发本段;若 TWRP 已启用 MTP
+# (sys.usb.config=mtp,adb),必须跳过,否则会把 ffs.mtp 解绑、config 重置回 adb-only,
+# 导致 Windows 只能枚举 ADB 看不到 MTP(实机验证 2026-10-31 定位)
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config!=mtp,adb
     write /config/usb_gadget/g1/UDC "none"
     rm /config/usb_gadget/g1/configs/b.1/f1
     rm /config/usb_gadget/g1/configs/b.1/f2
