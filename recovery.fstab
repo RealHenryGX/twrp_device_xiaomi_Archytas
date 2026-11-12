@@ -7,7 +7,6 @@
 /mnt/vendor/nvdata        ext4     /dev/block/platform/bootdevice/by-name/nvdata        flags=display=nvdata
 /mnt/vendor/nvcfg         ext4     /dev/block/platform/bootdevice/by-name/nvcfg         flags=display=nvcfg
 auto                      auto     /devices/platform/externdevice*                      flags=display=auto
-auto                      vfat     /devices/platform/mt_usb*                            flags=display=auto
 /persistent               emmc     /dev/block/platform/bootdevice/by-name/frp           flags=display=persistent
 /nvram                    emmc     /dev/block/platform/bootdevice/by-name/nvram         flags=display=nvram
 /proinfo                  emmc     /dev/block/platform/bootdevice/by-name/proinfo       flags=display=proinfo

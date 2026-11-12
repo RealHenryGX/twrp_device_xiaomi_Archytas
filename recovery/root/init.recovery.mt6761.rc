@@ -1,3 +1,9 @@
+on early-init
+    # The generic TWRP init.rc defaults to legacy android_usb. Archytas uses
+    # the ConfigFS gadget and the MTK MUSB UDC.
+    setprop sys.usb.configfs 1
+    setprop sys.usb.controller musb-hdrc
+
 on init
     mkdir /config
     mount configfs none /config
