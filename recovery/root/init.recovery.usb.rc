@@ -1,0 +1,2 @@
+# Archytas uses the ConfigFS gadget defined by init.recovery.mt6761.rc.
+# Keep the generic legacy android_usb rules out of this recovery ramdisk.
