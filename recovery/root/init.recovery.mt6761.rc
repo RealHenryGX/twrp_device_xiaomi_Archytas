@@ -1,6 +1,5 @@
 on early-init
-    # The generic TWRP init.rc defaults to legacy android_usb. Archytas uses
-    # the ConfigFS gadget and the MTK MUSB UDC.
+    # Use the PBRP-compatible ConfigFS gadget path on the MT6761 MUSB UDC.
     setprop sys.usb.configfs 1
     setprop sys.usb.controller musb-hdrc
 
@@ -9,63 +8,75 @@ on init
     mount configfs none /config
     mkdir /config/usb_gadget/g1 0770 shell shell
     write /config/usb_gadget/g1/idVendor 0x18d1
-    write /config/usb_gadget/g1/idProduct 0xd001
-    mkdir /config/usb_gadget/g1/strings/0x409 0770
+    write /config/usb_gadget/g1/bcdDevice 0x0223
+    write /config/usb_gadget/g1/bcdUSB 0x0200
+    mkdir /config/usb_gadget/g1/strings/0x409 0770 shell shell
     write /config/usb_gadget/g1/strings/0x409/serialnumber ${ro.serialno}
     write /config/usb_gadget/g1/strings/0x409/manufacturer ${ro.product.manufacturer}
     write /config/usb_gadget/g1/strings/0x409/product ${ro.product.model}
-    mkdir /config/usb_gadget/g1/configs/b.1 0777 shell shell
-    mkdir /config/usb_gadget/g1/configs/b.1/strings/0x409 0770 shell shell
     mkdir /config/usb_gadget/g1/functions/ffs.adb
-    mkdir /config/usb_gadget/g1/functions/ffs.mtp
-    setprop sys.usb.ffs.aio_compat 1
+    mkdir /config/usb_gadget/g1/functions/mtp.gs0
+    write /config/usb_gadget/g1/functions/mtp.gs0/os_desc/interface.MTP/compatible_id "MTP"
+    mkdir /config/usb_gadget/g1/configs/b.1 0770 shell shell
+    mkdir /config/usb_gadget/g1/configs/b.1/strings/0x409 0770 shell shell
+    write /config/usb_gadget/g1/os_desc/use 1
+    write /config/usb_gadget/g1/os_desc/b_vendor_code 0x1
+    write /config/usb_gadget/g1/os_desc/qw_sign "MSFT100"
+    symlink /config/usb_gadget/g1/configs/b.1 /config/usb_gadget/g1/os_desc/b.1
 
 on fs
-    # TWRP adb/mtp FunctionFS 挂载。
-    # adbd 必须拥有自己的 /dev/usb-ffs/adb/ep0；只挂载 mtp 会让
-    # adbd 永远无法完成 FUNCTIONFS_BIND，随后 MTP 组合也无法绑定 UDC。
     mkdir /dev/usb-ffs 0770 shell shell
     mkdir /dev/usb-ffs/adb 0770 shell shell
-    mkdir /dev/usb-ffs/mtp 0770 shell shell
-    mount functionfs adb /dev/usb-ffs/adb rmode=0770,fmode=0660,no_disconnect=1
-    mount functionfs mtp /dev/usb-ffs/mtp rmode=0770,fmode=0660,no_disconnect=1
-    # recovery 使用 eng 属性，不能依赖 ro.debuggable=0 才启动 adbd。
-    start adbd
+    mount functionfs adb /dev/usb-ffs/adb uid=2000,gid=2000
 
-on property:ro.debuggable=0
-    # distinguish USB shoulde connect or not, i.e. CDP vs SDP
-    write /sys/class/udc/musb-hdrc/device/cmode 2
-    # adbd is started from on fs after both FunctionFS endpoints are mounted.
+on boot
+    setprop sys.usb.config adb
 
-# 注意:adbd 每次(重)初始化都会 ffs.ready 0→1 触发本段;若 TWRP 已启用 MTP
-# (sys.usb.config=mtp,adb),必须跳过,否则会把 ffs.mtp 解绑、config 重置回 adb-only,
-# 导致 Windows 只能枚举 ADB 看不到 MTP(实机验证 2026-10-31 定位)
-on property:sys.usb.ffs.ready=1 && property:sys.usb.config!=mtp,adb
+on property:sys.usb.config=none
     write /config/usb_gadget/g1/UDC "none"
+    stop adbd
+    setprop sys.usb.ffs.ready 0
     rm /config/usb_gadget/g1/configs/b.1/f1
     rm /config/usb_gadget/g1/configs/b.1/f2
+    setprop sys.usb.state ${sys.usb.config}
+
+on property:sys.usb.config=adb
+    start adbd
+
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config=adb
     write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "adb"
-    write /config/usb_gadget/g1/idVendor 0x18d1
-    write /config/usb_gadget/g1/idProduct 0xd001
+    rm /config/usb_gadget/g1/configs/b.1/f1
+    rm /config/usb_gadget/g1/configs/b.1/f2
+    write /config/usb_gadget/g1/idProduct 0x4ee7
     symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f1
-    write /config/usb_gadget/g1/UDC "musb-hdrc"
+    write /config/usb_gadget/g1/UDC ${sys.usb.controller}
+    setprop sys.usb.state ${sys.usb.config}
 
-# TWRP 3.7.x MTP:PartitionManager::Enable_MTP() 会 set sys.usb.config=mtp,adb。
-# 实机 dmesg 2026-10-31 铁证:setprop 的瞬间 TWRP MtpServer 尚未 fork(源码顺序
-# setprop 在前、fork 在后,且 fork 后 usleep(800ms) 才 open /dev/usb-ffs/mtp/ep0),
-# 此时立即绑 gadget → ffs_func_bind()=-EBADFD(-77) → failed to start g1 → USB 全灭,
-# sys.usb.ffs.ready 永不置 1(整份 dmesg 0 次)。改为启动 mtp_rebind 脚本:等
-# ffs.mtp+ffs.adb 两个 functionfs 守护 ACTIVE(ep0 可写)后再重绑,绑定才能成功。
+on property:sys.usb.config=mtp
+    write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "mtp"
+    rm /config/usb_gadget/g1/configs/b.1/f1
+    rm /config/usb_gadget/g1/configs/b.1/f2
+    write /config/usb_gadget/g1/idVendor 0x2717
+    write /config/usb_gadget/g1/idProduct 0xff40
+    symlink /config/usb_gadget/g1/functions/mtp.gs0 /config/usb_gadget/g1/configs/b.1/f1
+    write /config/usb_gadget/g1/UDC ${sys.usb.controller}
+    setprop sys.usb.state ${sys.usb.config}
+
 on property:sys.usb.config=mtp,adb
-    start mtp_rebind
+    start adbd
 
-service mtp_rebind /sbin/sh /sbin/mtp_rebind.sh
-    class main
-    oneshot
-    disabled
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config=mtp,adb
+    write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "mtp_adb"
+    rm /config/usb_gadget/g1/configs/b.1/f1
+    rm /config/usb_gadget/g1/configs/b.1/f2
+    write /config/usb_gadget/g1/idVendor 0x2717
+    write /config/usb_gadget/g1/idProduct 0xff48
+    symlink /config/usb_gadget/g1/functions/mtp.gs0 /config/usb_gadget/g1/configs/b.1/f1
+    symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f2
+    write /config/usb_gadget/g1/UDC ${sys.usb.controller}
+    setprop sys.usb.state ${sys.usb.config}
 
 on post-fs
-    # Support A/B feature for emmc boot region
     symlink /dev/block/sda /dev/block/mmcblk0boot0
     symlink /dev/block/sdb /dev/block/mmcblk0boot1
     symlink /dev/block/mmcblk0boot0 /dev/block/platform/bootdevice/by-name/preloader_a
