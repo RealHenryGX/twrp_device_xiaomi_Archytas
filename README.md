@@ -22,9 +22,9 @@ Verified on device with recovery build 43347476866: `adb` enumerates,
 `sys.usb.state=mtp,adb`, `/sdcard` reports the userdata capacity, and the
 recovery log registers Internal Storage without the earlier `/data/media`
 open error. That build still bound the host MTP interface to `mtp.gs0`, while
-TWRP's MTP server used `/dev/usb-ffs/mtp`. The device tree now binds `ffs.mtp`
-after its endpoints become ready; host visibility needs verification after a
-new build and flash.
+TWRP's MTP server used `/dev/usb-ffs/mtp`. Build 43376048912 attempted to bind
+`ffs.mtp`, but TWRP's MTP child exited before the endpoints appeared. Recovery
+then disabled MTP and returned to ADB-only (`0x18d1:0x4ee7`).
 
 On this bootloader, `fastboot reboot recovery` can report OKAY without entering
 Recovery. After flashing, enter Recovery manually with the hardware key
@@ -44,7 +44,7 @@ history intact; avoid cherry-picking a superseded USB rule into a new tree.
 | `f81330e` | Incorrect rationale | `/sdcard` build variables alone did not create internal storage. |
 | `f74fcd6` | Verified | Early data-media initialization created `/data/media` and made `/sdcard` show userdata capacity. |
 | `7fc563f` | Verified | Removed five absent Wi-Fi partition entries from the running fstab. |
-| `6fbd587` | Awaiting host validation | Replaces `mtp.gs0` with `ffs.mtp`; check Windows Explorer and ADB together after flashing. |
+| `6fbd587` | Failed on device | Replaces `mtp.gs0` with `ffs.mtp`; build 43376048912 booted but MTP never bound. Log: `mtppipe_thread unexpected read_count 0`, then `TWRP crashed; disabling MTP as a precaution`. ADB recovered in ADB-only mode. |
 
 The pre-existing `auto /devices/platform/externdevice*` fstab entry appears as
 `/auto0` with 0 MB and storage ID 65537 when no external device is attached.
