@@ -45,6 +45,7 @@ on boot
 
 on property:sys.usb.config=none
     write /config/usb_gadget/g1/UDC "none"
+    setprop sys.usb.mtp.rebinding 0
     stop adbd
     setprop sys.usb.ffs.ready 0
     setprop sys.usb.ffs.mtp.ready 0
@@ -86,7 +87,7 @@ on property:sys.usb.config=mtp,adb
 
 # Expose ADB while the MTP FunctionFS server is still preparing its endpoints.
 # mtp_rebind replaces this temporary configuration once MTP is ready.
-on property:sys.usb.ffs.ready=1 && property:sys.usb.config=mtp,adb
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config=mtp,adb && property:sys.usb.mtp.rebinding!=1
     write /config/usb_gadget/g1/UDC "none"
     rm /config/usb_gadget/g1/configs/b.1/f1
     rm /config/usb_gadget/g1/configs/b.1/f2
@@ -94,8 +95,10 @@ on property:sys.usb.ffs.ready=1 && property:sys.usb.config=mtp,adb
     write /config/usb_gadget/g1/idProduct 0x4ee7
     symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f1
     write /config/usb_gadget/g1/UDC ${sys.usb.controller}
+    start mtp_rebind
 
 service mtp_rebind /sbin/sh /sbin/mtp_rebind.sh
     class main
     oneshot
     disabled
+    seclabel u:r:su:s0

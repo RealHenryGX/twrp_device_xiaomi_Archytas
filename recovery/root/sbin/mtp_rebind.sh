@@ -51,6 +51,7 @@ esac
 sleep 0.5
 
 # Bind the MTP interface to the same FunctionFS endpoints used by TWRP.
+setprop sys.usb.mtp.rebinding 1
 echo none > "$G/UDC" 2>/dev/null
 rm -f "$G/configs/b.1/f1" "$G/configs/b.1/f2"
 echo 0x18d1 > "$G/idVendor"
