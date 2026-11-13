@@ -91,8 +91,9 @@ TW_EXTRA_LANGUAGES := true
 TW_SCREEN_BLANK_ON_BOOT := true
 TW_INPUT_BLACKLIST := "hbtp_vm"
 TW_USE_TOOLBOX := true
-# Archytas recovery exposes the native recovery storage root directly.
-# Do not use Android's post-boot /data/media/0 FUSE path here.
+# Enable data-media before TWRP processes /data, so its post-processing
+# creates /data/media and registers it with MTP on an empty userdata volume.
+RECOVERY_SDCARD_ON_DATA := true
 TW_INTERNAL_STORAGE_PATH := /sdcard
 TW_INTERNAL_STORAGE_MOUNT_POINT := "sdcard"
 # recovery 环境无 health HAL 服务,TWRP 3.7.x 默认走 HIDL GetBatteryInfo 取不到电量;
