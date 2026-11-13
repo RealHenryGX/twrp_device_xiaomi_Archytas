@@ -1,3 +1,6 @@
+on init
+    setprop sys.usb.ffs.aio_compat 1
+
 on fs
     # TWRP's MTP server serves the FunctionFS endpoints.
     mkdir /dev/usb-ffs 0770 shell shell
