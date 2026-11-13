@@ -23,8 +23,10 @@ Verified on device with recovery build 43347476866: `adb` enumerates,
 recovery log registers Internal Storage without the earlier `/data/media`
 open error. That build still bound the host MTP interface to `mtp.gs0`, while
 TWRP's MTP server used `/dev/usb-ffs/mtp`. Build 43376048912 attempted to bind
-`ffs.mtp`, but TWRP's MTP child exited before the endpoints appeared. Recovery
-then disabled MTP and returned to ADB-only (`0x18d1:0x4ee7`).
+`ffs.mtp`; host MTP storage was not observed. The log later shows a UI Reboot
+action, a main-process SIGABRT, and only then an MTP pipe EOF. On the restarted
+Recovery, TWRP disabled MTP and returned to ADB-only (`0x18d1:0x4ee7`). The
+pipe EOF is a consequence of that restart, not proof that MTP caused the abort.
 
 On this bootloader, `fastboot reboot recovery` can report OKAY without entering
 Recovery. After flashing, enter Recovery manually with the hardware key
@@ -44,7 +46,8 @@ history intact; avoid cherry-picking a superseded USB rule into a new tree.
 | `f81330e` | Incorrect rationale | `/sdcard` build variables alone did not create internal storage. |
 | `f74fcd6` | Verified | Early data-media initialization created `/data/media` and made `/sdcard` show userdata capacity. |
 | `7fc563f` | Verified | Removed five absent Wi-Fi partition entries from the running fstab. |
-| `6fbd587` | Failed on device | Replaces `mtp.gs0` with `ffs.mtp`; build 43376048912 booted but MTP never bound. Log: `mtppipe_thread unexpected read_count 0`, then `TWRP crashed; disabling MTP as a precaution`. ADB recovered in ADB-only mode. |
+| `6fbd587` | Host MTP unverified | Replaces `mtp.gs0` with `ffs.mtp`. Build 43376048912 was observed in ADB-only mode after a UI Reboot action and main-process SIGABRT. The MTP pipe EOF followed that abort. |
+| `7d01d3b` | No demonstrated improvement | Restored `sys.usb.ffs.aio_compat=1` in a ramdisk-only test. The property was set, but the post-reboot observation again found ADB-only and MTP `ep0`; a controlled startup trace is still needed. |
 
 The pre-existing `auto /devices/platform/externdevice*` fstab entry appears as
 `/auto0` with 0 MB and storage ID 65537 when no external device is attached.
