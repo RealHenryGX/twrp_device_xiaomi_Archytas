@@ -50,3 +50,23 @@ The pre-existing `auto /devices/platform/externdevice*` fstab entry appears as
 `/auto0` with 0 MB and storage ID 65537 when no external device is attached.
 Internal Storage is a separate 11 GB entry with storage ID 65538. Evaluate
 external-media support before changing the wildcard entry.
+
+## Fast USB-only recovery image test
+
+For edits limited to `init.recovery.usb.rc`, `init.recovery.mt8766.rc`, and
+`sbin/mtp_rebind.sh`, use `tools/patch_recovery_ramdisk.py` against a previously
+built recovery image. It replaces those three ramdisk files while preserving
+the kernel and recalculating the Android boot ID. It accepts this device's
+Android boot v1 image with a gzip newc ramdisk and enforces the 32 MiB partition
+limit. It creates a separate output image.
+
+```sh
+python3 tools/patch_recovery_ramdisk.py \
+  --image ../artifacts/twrp_flash_43352756678/recovery.img \
+  --tree . \
+  --output ../artifacts/twrp_flash_43352756678/recovery-ffs-mtp.img
+```
+
+Build from source for changes to `BoardConfig.mk`, `recovery.fstab`, kernel,
+or compiled Recovery code. After flashing either image, enter Recovery with
+the hardware keys and verify both ADB and Windows MTP storage visibility.
