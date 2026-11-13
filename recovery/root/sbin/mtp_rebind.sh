@@ -12,39 +12,55 @@
 #   ffs_func_bind() returns -EBADFD (-77) -> "failed to start g1" -> USB dead ->
 #   sys.usb.ffs.ready never set -> adbd open/retry loop, TWRP Stop/Start MTP cycle.
 #
-# Fix: wait until BOTH functionfs daemons are active (ep0 writable), give them
-# time to finish FUNCTIONFS_BIND, then rebind the gadget. ffs_func_bind() then
-# succeeds, USB enumerates MTP (0x4ee2) + ADB.
+# Wait for FunctionFS MTP endpoints (and ADB endpoints when enabled), then
+# bind ffs.mtp and ffs.adb to the USB gadget. TWRP serves the MTP protocol
+# through /dev/usb-ffs/mtp, not the separate kernel mtp.gs0 interface.
 
 G=/config/usb_gadget/g1
 
-# 1) wait for TWRP MtpServer to open ffs.mtp ep0 (up to ~10s)
+# Wait for TWRP to publish FunctionFS MTP endpoints (up to ~15s).
 i=0
-while [ $i -lt 100 ]; do
-    [ -w /dev/usb-ffs/mtp/ep0 ] && break
+while [ $i -lt 150 ]; do
+    [ -e /dev/usb-ffs/mtp/ep1 ] && break
     i=$((i+1))
     sleep 0.1
 done
+[ -e /dev/usb-ffs/mtp/ep1 ] || exit 1
 
-# 2) wait for adbd to open ffs.adb ep0 (up to ~10s)
-i=0
-while [ $i -lt 100 ]; do
-    [ -w /dev/usb-ffs/adb/ep0 ] && break
-    i=$((i+1))
-    sleep 0.1
-done
+mode=$(getprop sys.usb.config)
+case "$mode" in
+    mtp,adb)
+        i=0
+        while [ $i -lt 150 ]; do
+            [ "$(getprop sys.usb.ffs.ready)" = 1 ] && [ -e /dev/usb-ffs/adb/ep1 ] && break
+            i=$((i+1))
+            sleep 0.1
+        done
+        [ -e /dev/usb-ffs/adb/ep1 ] || exit 1
+        product=0x4ee2
+        configuration=mtp_adb
+        ;;
+    mtp)
+        product=0x4ee1
+        configuration=mtp
+        ;;
+    *) exit 0 ;;
+esac
 
-# 3) give daemons time to complete FUNCTIONFS_BIND
+# Give both FunctionFS daemons time to finish descriptor setup.
 sleep 0.5
 
-# 4) rebind gadget: mtp (f1) + adb (f2), MTP product id 0x4ee2
-echo 0x18d1 > $G/idVendor 2>/dev/null
-echo 0x4ee2 > $G/idProduct 2>/dev/null
-echo none > $G/UDC 2>/dev/null
-rm $G/configs/b.1/f1 2>/dev/null
-rm $G/configs/b.1/f2 2>/dev/null
-ln -s $G/functions/ffs.mtp $G/configs/b.1/f1 2>/dev/null
-ln -s $G/functions/ffs.adb $G/configs/b.1/f2 2>/dev/null
-echo musb-hdrc > $G/UDC 2>/dev/null
+# Bind the MTP interface to the same FunctionFS endpoints used by TWRP.
+echo none > "$G/UDC" 2>/dev/null
+rm -f "$G/configs/b.1/f1" "$G/configs/b.1/f2"
+echo 0x18d1 > "$G/idVendor"
+echo "$product" > "$G/idProduct"
+echo "$configuration" > "$G/configs/b.1/strings/0x409/configuration"
+ln -s "$G/functions/ffs.mtp" "$G/configs/b.1/f1" || exit 1
+if [ "$mode" = mtp,adb ]; then
+    ln -s "$G/functions/ffs.adb" "$G/configs/b.1/f2" || exit 1
+fi
+echo musb-hdrc > "$G/UDC" || exit 1
+setprop sys.usb.state "$mode"
 
 exit 0
