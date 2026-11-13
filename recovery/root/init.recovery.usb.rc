@@ -79,3 +79,14 @@ on property:sys.usb.config=mtp
 
 on property:sys.usb.config=mtp,adb
     start adbd
+
+# Expose ADB while the MTP FunctionFS server is still preparing its endpoints.
+# mtp_rebind replaces this temporary configuration once MTP is ready.
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config=mtp,adb
+    write /config/usb_gadget/g1/UDC "none"
+    rm /config/usb_gadget/g1/configs/b.1/f1
+    rm /config/usb_gadget/g1/configs/b.1/f2
+    write /config/usb_gadget/g1/idVendor 0x18d1
+    write /config/usb_gadget/g1/idProduct 0x4ee7
+    symlink /config/usb_gadget/g1/functions/ffs.adb /config/usb_gadget/g1/configs/b.1/f1
+    write /config/usb_gadget/g1/UDC ${sys.usb.controller}
